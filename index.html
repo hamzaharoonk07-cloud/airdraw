@@ -3,94 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>hamza neon air draw</title>
+    <title>Hamza Neon Air Draw - Pro Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <style>
         body { margin: 0; background: #050505; color: white; font-family: 'Inter', sans-serif; overflow: hidden; }
         
-        /* Collapsible Side UI Panel */
         #side-panel {
             position: absolute; top: 20px; left: 10px; z-index: 100;
-            background: rgba(10, 10, 10, 0.85); padding: 15px; border-radius: 20px;
+            background: rgba(10, 10, 10, 0.9); padding: 15px; border-radius: 24px;
             border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(20px);
             display: flex; flex-direction: column; gap: 15px; 
-            width: 45px; /* Collapsed width */
-            height: auto;
-            align-items: center;
+            width: 45px; height: auto; align-items: center;
             box-shadow: 0 0 30px rgba(0,0,0,0.8);
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: all 0.3s ease;
             overflow: hidden;
         }
 
-        /* Expanded State on Hover */
-        #side-panel:hover, #side-panel.expanded {
-            width: 70px;
-            background: rgba(15, 15, 15, 0.95);
-            left: 20px;
-        }
+        /* Minimize when not hovered */
+        #side-panel:not(:hover) { opacity: 0.5; transform: translateX(-5px); }
+        #side-panel:hover { width: 75px; left: 20px; opacity: 1; }
 
-        .palette { display: flex; flex-direction: column; gap: 10px; opacity: 0.4; transition: opacity 0.3s; }
-        #side-panel:hover .palette { opacity: 1; }
-
+        .palette { display: flex; flex-direction: column; gap: 10px; }
         .swatch {
-            width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
-            border: 2px solid transparent; transition: all 0.2s ease;
+            width: 35px; height: 35px; border-radius: 50%; cursor: pointer;
+            border: 2px solid transparent; transition: 0.2s;
             position: relative; flex-shrink: 0;
         }
-        .swatch.active { 
-            border-color: white; 
-            box-shadow: 0 0 15px currentColor;
-            transform: scale(1.1);
-        }
-        .swatch.active::after {
-            content: '✓'; position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%); color: white; font-size: 10px; font-weight: bold;
-        }
+        .swatch.active { border-color: white; box-shadow: 0 0 15px currentColor; transform: scale(1.1); }
+        .swatch.active::after { content: '✓'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 12px; }
 
-        #size-container { writing-mode: bt-lr; height: 100px; display: flex; align-items: center; margin: 10px 0; }
-        input[type="range"] { -webkit-appearance: slider-vertical; width: 6px; height: 100px; cursor: pointer; }
+        #size-container { height: 120px; display: flex; align-items: center; justify-content: center; }
+        input[type="range"] { -webkit-appearance: slider-vertical; width: 8px; height: 100px; cursor: pointer; }
 
         canvas, video { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; transform: scaleX(-1); }
         #drawCanvas { z-index: 2; }
         #skeletonCanvas { z-index: 3; pointer-events: none; opacity: 0.4; }
-        video { z-index: 1; opacity: 0.15; filter: contrast(120%) brightness(80%); }
+        video { z-index: 1; opacity: 0.2; filter: grayscale(1) contrast(1.2); }
 
         .status-bar {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            z-index: 100; padding: 10px 20px; border-radius: 50px;
-            background: rgba(20, 20, 20, 0.8); font-weight: 700; text-transform: uppercase;
-            letter-spacing: 1px; border: 1px solid #333; font-size: 0.7rem;
+            z-index: 100; padding: 12px 25px; border-radius: 50px;
+            background: rgba(20, 20, 20, 0.85); font-weight: 700; text-transform: uppercase;
+            letter-spacing: 1.5px; border: 1px solid #333; font-size: 0.8rem;
+            transition: all 0.3s;
         }
 
         .clear-btn {
-            background: #222; color: #ff4444; border: 1px solid #ff4444; width: 40px; height: 40px;
-            border-radius: 50%; cursor: pointer; font-weight: bold; font-size: 0.5rem;
-            transition: all 0.2s;
+            background: #222; color: #ff4444; border: 1px solid #ff4444; width: 42px; height: 42px;
+            border-radius: 50%; cursor: pointer; font-weight: bold; font-size: 0.6rem;
         }
-        .clear-btn:hover { background: #ff4444; color: white; }
     </style>
 </head>
 <body>
 
-    <div id="side-panel" id="uiPanel">
+    <div id="side-panel">
         <div class="palette" id="colorPalette">
             <div class="swatch active" style="background: #00f2ff;" data-color="#00f2ff"></div>
             <div class="swatch" style="background: #ff007b;" data-color="#ff007b"></div>
             <div class="swatch" style="background: #00ff40;" data-color="#00ff40"></div>
             <div class="swatch" style="background: #ffff00;" data-color="#ffff00"></div>
             <div class="swatch" style="background: #9d00ff;" data-color="#9d00ff"></div>
-            <div class="swatch" style="background: #ff4d00;" data-color="#ff4d00"></div>
             <div class="swatch" style="background: #ffffff;" data-color="#ffffff"></div>
         </div>
         <div id="size-container">
-            <input type="range" id="sizeSlider" min="2" max="40" value="10" step="1">
+            <input type="range" id="sizeSlider" min="2" max="60" value="12" step="1">
         </div>
-        <button class="clear-btn" onclick="clearCanvas()">DEL</button>
+        <button class="clear-btn" onclick="clearCanvas()">CLEAR</button>
     </div>
 
-    <div class="status-bar" id="statusLabel">Initializing AI...</div>
+    <div class="status-bar" id="statusLabel">Ready to Draw</div>
 
     <video id="inputVideo" playsinline></video>
     <canvas id="drawCanvas"></canvas>
@@ -100,7 +83,6 @@
         const video = document.getElementById('inputVideo');
         const drawCanvas = document.getElementById('drawCanvas');
         const skelCanvas = document.getElementById('skeletonCanvas');
-        const sidePanel = document.getElementById('side-panel');
         const dctx = drawCanvas.getContext('2d');
         const sctx = skelCanvas.getContext('2d');
         const statusLabel = document.getElementById('statusLabel');
@@ -111,11 +93,9 @@
         let lastPos = { x: 0, y: 0 };
         let isDrawing = false;
 
-        // Color Selection with Auto-Minimize Logic
         document.querySelectorAll('.swatch').forEach(swatch => {
-            swatch.addEventListener('click', (e) => {
+            swatch.addEventListener('click', () => {
                 const color = swatch.dataset.color;
-                
                 if (swatch.classList.contains('active')) {
                     if (activeColors.length > 1) {
                         swatch.classList.remove('active');
@@ -125,12 +105,8 @@
                     swatch.classList.add('active');
                     activeColors.push(color);
                 }
-                
+                statusLabel.style.color = activeColors[0];
                 statusLabel.style.borderColor = activeColors[0];
-
-                // FORCE MINIMIZE: We remove hover state by briefly disabling pointer events
-                // or simply letting the CSS handle the transition once the mouse moves away.
-                // To make it feel "snappy", we can manually trigger a class if needed.
             });
         });
 
@@ -153,23 +129,23 @@
             }
 
             for (const landmarks of results.multiHandLandmarks) {
-                drawConnectors(sctx, landmarks, HAND_CONNECTIONS, {color: '#ffffff22', lineWidth: 1});
-                drawLandmarks(sctx, landmarks, {color: activeColors[0], lineWidth: 1, radius: 2});
-
+                window.drawConnectors(sctx, landmarks, HAND_CONNECTIONS, {color: '#ffffff22', lineWidth: 1});
+                
                 const indexTip = landmarks[8];
                 const x = indexTip.x * drawCanvas.width;
                 const y = indexTip.y * drawCanvas.height;
 
-                const isIndexExtended = landmarks[8].y < landmarks[6].y;
-                const isMiddleExtended = landmarks[12].y < landmarks[10].y;
-                const isPinkyExtended = landmarks[20].y < landmarks[18].y;
+                // Gestures: Index up = Draw | Index+Middle+Ring up = Erase | Fist = Pause
+                const isIndexUp = indexTip.y < landmarks[6].y;
+                const isMiddleUp = landmarks[12].y < landmarks[10].y;
+                const isRingUp = landmarks[16].y < landmarks[14].y;
 
-                if (isIndexExtended && isMiddleExtended && isPinkyExtended) {
-                    statusLabel.innerText = "Mode: Eraser";
+                if (isIndexUp && isMiddleUp && isRingUp) {
+                    statusLabel.innerText = "Mode: Erasing";
                     dctx.globalCompositeOperation = 'destination-out';
-                    draw(x, y, 60); 
+                    draw(x, y, 100); 
                 } 
-                else if (!isIndexExtended) {
+                else if (!isIndexUp) {
                     statusLabel.innerText = "Mode: Paused";
                     isDrawing = false;
                 }
@@ -178,17 +154,12 @@
                     dctx.globalCompositeOperation = 'source-over';
                     draw(x, y, sizeSlider.value);
                 }
-
                 lastPos = { x, y };
             }
         }
 
         function draw(x, y, brushSize) {
-            if (!isDrawing) {
-                isDrawing = true;
-                lastPos = { x, y };
-                return;
-            }
+            if (!isDrawing) { isDrawing = true; lastPos = { x, y }; return; }
 
             const currentColor = activeColors[colorCounter % activeColors.length];
             colorCounter++;
@@ -196,25 +167,23 @@
             dctx.beginPath();
             dctx.moveTo(lastPos.x, lastPos.y);
             dctx.lineTo(x, y);
-            
             dctx.strokeStyle = currentColor;
             dctx.lineWidth = brushSize;
             dctx.lineCap = 'round';
             dctx.lineJoin = 'round';
-            
-            dctx.shadowBlur = brushSize;
+            dctx.shadowBlur = brushSize * 1.2;
             dctx.shadowColor = currentColor;
-            
             dctx.stroke();
+            dctx.shadowBlur = 0; // Performance boost
         }
 
         const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.75, minTrackingConfidence: 0.75 });
         hands.onResults(onResults);
 
         const camera = new Camera(video, {
             onFrame: async () => { await hands.send({image: video}); },
-            width: 1280, height: 720
+            width: 640, height: 480 // Lower resolution for better AI stability
         });
         camera.start();
     </script>
