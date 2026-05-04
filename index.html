@@ -3,241 +3,220 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pro Air Draw | Skeletal Engine</title>
-    
-    <!-- MediaPipe Core Libraries -->
+    <title>Hamza Neon Air Draw - Corrected</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    
     <style>
-        body {
-            margin: 0;
-            background: #050505;
-            color: white;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        body { margin: 0; background: #050505; color: white; font-family: 'Inter', sans-serif; overflow: hidden; }
+        
+        /* Collapsible Side UI Panel */
+        #side-panel {
+            position: absolute; top: 20px; left: 10px; z-index: 100;
+            background: rgba(10, 10, 10, 0.85); padding: 15px; border-radius: 24px;
+            border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(20px);
+            display: flex; flex-direction: column; gap: 15px; 
+            width: 45px; height: auto; align-items: center;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             overflow: hidden;
         }
 
-        /* Top Control Bar */
-        #toolbar {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 100;
-            background: rgba(20, 20, 20, 0.85);
-            backdrop-filter: blur(10px);
-            padding: 12px 25px;
-            border-radius: 50px;
-            display: flex;
-            gap: 20px;
-            align-items: center;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        #side-panel:hover {
+            width: 75px;
+            left: 20px;
+            background: rgba(15, 15, 15, 0.95);
         }
 
-        .tool-group { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-        .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #888; }
-
-        /* Color Buttons */
-        .color-palette { display: flex; gap: 8px; }
-        .color-swatch {
-            width: 24px; height: 24px;
-            border-radius: 50%;
-            cursor: pointer;
-            border: 2px solid transparent;
-            transition: 0.2s;
-        }
-        .color-swatch.active { border-color: white; transform: scale(1.2); }
-
-        /* Canvas Layers */
-        canvas, video {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            object-fit: cover;
-            transform: scaleX(-1); /* Mirror Mode */
+        .palette { display: flex; flex-direction: column; gap: 10px; }
+        
+        .swatch {
+            width: 35px; height: 35px; border-radius: 50%; cursor: pointer;
+            border: 2px solid transparent; transition: all 0.2s ease;
+            position: relative; flex-shrink: 0;
         }
 
-        #video-feed { z-index: 1; opacity: 0.2; filter: grayscale(1); }
-        #draw-canvas { z-index: 2; }
-        #skeleton-canvas { z-index: 3; pointer-events: none; }
-
-        /* Interaction Status */
-        #status-indicator {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 100;
-            padding: 8px 20px;
-            border-radius: 20px;
-            background: rgba(0,0,0,0.6);
-            font-weight: 600;
-            letter-spacing: 1px;
-            border: 1px solid rgba(255,255,255,0.1);
+        .swatch.active { 
+            border-color: white; 
+            box-shadow: 0 0 15px currentColor;
+            transform: scale(1.1);
         }
 
-        input[type="range"] { accent-color: #ffffff; cursor: pointer; }
-        button#clear-btn {
-            background: #ff3b30;
-            border: none; color: white;
-            padding: 6px 15px; border-radius: 15px;
-            font-weight: bold; cursor: pointer;
+        .swatch.active::after {
+            content: '✓'; position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); color: white; font-size: 12px; font-weight: bold;
         }
+
+        #size-container { height: 120px; display: flex; align-items: center; justify-content: center; }
+        input[type="range"] { 
+            writing-mode: bt-lr; /* For Firefox */
+            -webkit-appearance: slider-vertical; 
+            width: 8px; height: 100px; cursor: pointer; 
+        }
+
+        canvas, video { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; transform: scaleX(-1); }
+        #drawCanvas { z-index: 2; }
+        #skeletonCanvas { z-index: 3; pointer-events: none; opacity: 0.5; }
+        video { z-index: 1; opacity: 0.2; filter: contrast(120%) brightness(80%); }
+
+        .status-bar {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            z-index: 100; padding: 12px 25px; border-radius: 50px;
+            background: rgba(20, 20, 20, 0.8); font-weight: 700; text-transform: uppercase;
+            letter-spacing: 1.5px; border: 1px solid #333; font-size: 0.8rem;
+            color: #00f2ff; text-shadow: 0 0 5px #00f2ff;
+        }
+
+        .clear-btn {
+            background: #222; color: #ff4444; border: 1px solid #ff4444; width: 40px; height: 40px;
+            border-radius: 50%; cursor: pointer; font-weight: bold; font-size: 0.6rem;
+            transition: all 0.2s;
+        }
+        .clear-btn:hover { background: #ff4444; color: white; }
     </style>
 </head>
 <body>
 
-    <div id="toolbar">
-        <div class="tool-group">
-            <span class="label">Color</span>
-            <div class="color-palette" id="palette">
-                <div class="color-swatch active" style="background: #00f2ff;" data-color="#00f2ff"></div>
-                <div class="color-swatch" style="background: #ff007f;" data-color="#ff007f"></div>
-                <div class="color-swatch" style="background: #39ff14;" data-color="#39ff14"></div>
-                <div class="color-swatch" style="background: #ffff00;" data-color="#ffff00"></div>
-                <div class="color-swatch" style="background: #ffffff;" data-color="#ffffff"></div>
-            </div>
+    <div id="side-panel">
+        <div class="palette" id="colorPalette">
+            <div class="swatch active" style="background: #00f2ff;" data-color="#00f2ff"></div>
+            <div class="swatch" style="background: #ff007b;" data-color="#ff007b"></div>
+            <div class="swatch" style="background: #00ff40;" data-color="#00ff40"></div>
+            <div class="swatch" style="background: #ffff00;" data-color="#ffff00"></div>
+            <div class="swatch" style="background: #9d00ff;" data-color="#9d00ff"></div>
+            <div class="swatch" style="background: #ffffff;" data-color="#ffffff"></div>
         </div>
-        <div class="tool-group">
-            <span class="label">Size</span>
-            <input type="range" id="brush-size" min="2" max="30" value="8">
+        <div id="size-container">
+            <input type="range" id="sizeSlider" min="2" max="50" value="10" step="1">
         </div>
-        <button id="clear-btn">RESET</button>
+        <button class="clear-btn" onclick="clearCanvas()">CLEAR</button>
     </div>
 
-    <div id="status-indicator">INITIALIZING SENSORS...</div>
+    <div class="status-bar" id="statusLabel">Initializing AI...</div>
 
-    <video id="video-feed" playsinline></video>
-    <canvas id="draw-canvas"></canvas>
-    <canvas id="skeleton-canvas"></canvas>
+    <video id="inputVideo" playsinline></video>
+    <canvas id="drawCanvas"></canvas>
+    <canvas id="skeletonCanvas"></canvas>
 
     <script>
-        const videoElement = document.getElementById('video-feed');
-        const drawCanvas = document.getElementById('draw-canvas');
+        const video = document.getElementById('inputVideo');
+        const drawCanvas = document.getElementById('drawCanvas');
+        const skelCanvas = document.getElementById('skeletonCanvas');
         const dctx = drawCanvas.getContext('2d');
-        const skeletonCanvas = document.getElementById('skeleton-canvas');
-        const sctx = skeletonCanvas.getContext('2d');
-        const status = document.getElementById('status-indicator');
+        const sctx = skelCanvas.getContext('2d');
+        const statusLabel = document.getElementById('statusLabel');
+        const sizeSlider = document.getElementById('sizeSlider');
 
-        let currentColor = "#00f2ff";
-        let lastX = null;
-        let lastY = null;
+        let activeColors = ["#00f2ff"];
+        let colorCounter = 0;
+        let lastPos = { x: 0, y: 0 };
+        let isDrawing = false;
+
+        // Multi-Select Color Logic
+        document.querySelectorAll('.swatch').forEach(swatch => {
+            swatch.addEventListener('click', () => {
+                const color = swatch.dataset.color;
+                if (swatch.classList.contains('active')) {
+                    if (activeColors.length > 1) {
+                        swatch.classList.remove('active');
+                        activeColors = activeColors.filter(c => c !== color);
+                    }
+                } else {
+                    swatch.classList.add('active');
+                    activeColors.push(color);
+                }
+                statusLabel.style.color = activeColors[0];
+                statusLabel.style.textShadow = `0 0 5px ${activeColors[0]}`;
+            });
+        });
 
         function resize() {
-            [drawCanvas, skeletonCanvas].forEach(c => {
-                c.width = window.innerWidth;
-                c.height = window.innerHeight;
-            });
+            drawCanvas.width = skelCanvas.width = window.innerWidth;
+            drawCanvas.height = skelCanvas.height = window.innerHeight;
         }
         window.addEventListener('resize', resize);
         resize();
 
-        // Color Picker Logic
-        document.querySelectorAll('.color-swatch').forEach(swatch => {
-            swatch.onclick = () => {
-                document.querySelector('.color-swatch.active').classList.remove('active');
-                swatch.classList.add('active');
-                currentColor = swatch.dataset.color;
-            };
-        });
-
-        document.getElementById('clear-btn').onclick = () => dctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        function clearCanvas() { dctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height); }
 
         function onResults(results) {
-            // Clear skeleton frame every update
-            sctx.clearRect(0, 0, skeletonCanvas.width, skeletonCanvas.height);
+            sctx.clearRect(0, 0, skelCanvas.width, skelCanvas.height);
 
             if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-                status.innerText = "✋ PLACE HAND IN VIEW";
-                lastX = null; lastY = null;
+                statusLabel.innerText = "Hand not visible";
+                isDrawing = false;
                 return;
             }
 
             for (const landmarks of results.multiHandLandmarks) {
-                // Draw Skeletal Structure
-                drawConnectors(sctx, landmarks, HAND_CONNECTIONS, {color: '#ffffff', lineWidth: 2});
-                drawLandmarks(sctx, landmarks, {color: currentColor, lineWidth: 1, radius: 3});
+                // Use standard window scope for MediaPipe helpers
+                window.drawConnectors(sctx, landmarks, HAND_CONNECTIONS, {color: '#ffffff33', lineWidth: 2});
+                window.drawLandmarks(sctx, landmarks, {color: activeColors[0], lineWidth: 1, radius: 3});
 
                 const indexTip = landmarks[8];
-                const indexPip = landmarks[6];
-                const middleTip = landmarks[12];
-                const thumbTip = landmarks[4];
+                const indexKnuckle = landmarks[5];
+                const pinkyTip = landmarks[20];
                 
                 const x = indexTip.x * drawCanvas.width;
                 const y = indexTip.y * drawCanvas.height;
 
-                // --- GESTURE ENGINE ---
-                // 1. Draw Gesture: Index finger up, Middle finger down
-                const isDrawing = indexTip.y < indexPip.y && middleTip.y > landmarks[9].y;
-                
-                // 2. Erase Gesture: Open Palm (Index and Middle both up)
-                const isErasing = indexTip.y < indexPip.y && middleTip.y < landmarks[10].y;
+                // Robust Gesture Logic
+                const isIndexExtended = indexTip.y < landmarks[6].y;
+                const isMiddleExtended = landmarks[12].y < landmarks[10].y;
+                const isPinkyExtended = pinkyTip.y < landmarks[18].y;
 
-                // 3. Pause Gesture: Fist (Index and Middle both tucked)
-                const isPaused = indexTip.y > indexPip.y && middleTip.y > landmarks[10].y;
-
-                if (isPaused) {
-                    status.innerText = "⏸️ SYSTEM PAUSED";
-                    lastX = null; lastY = null;
-                } 
-                else if (isErasing) {
-                    status.innerText = "🧼 ERASER ACTIVE";
+                if (isIndexExtended && isMiddleExtended && isPinkyExtended) {
+                    statusLabel.innerText = "Mode: Eraser";
                     dctx.globalCompositeOperation = 'destination-out';
-                    drawStroke(x, y, 50);
+                    draw(x, y, 80); 
                 } 
-                else if (isDrawing) {
-                    status.innerText = "✏️ DRAWING MODE";
-                    dctx.globalCompositeOperation = 'source-over';
-                    drawStroke(x, y, document.getElementById('brush-size').value);
+                else if (!isIndexExtended) {
+                    statusLabel.innerText = "Mode: Paused";
+                    isDrawing = false;
                 }
-
-                lastX = x;
-                lastY = y;
+                else {
+                    statusLabel.innerText = "Mode: Drawing";
+                    dctx.globalCompositeOperation = 'source-over';
+                    draw(x, y, sizeSlider.value);
+                }
+                lastPos = { x, y };
             }
         }
 
-        function drawStroke(x, y, size) {
-            if (lastX === null) { lastX = x; lastY = y; return; }
+        function draw(x, y, brushSize) {
+            if (!isDrawing) {
+                isDrawing = true;
+                lastPos = { x, y };
+                return;
+            }
+
+            const currentColor = activeColors[colorCounter % activeColors.length];
+            colorCounter++;
 
             dctx.beginPath();
-            dctx.moveTo(lastX, lastY);
+            dctx.moveTo(lastPos.x, lastPos.y);
             dctx.lineTo(x, y);
+            
             dctx.strokeStyle = currentColor;
-            dctx.lineWidth = size;
+            dctx.lineWidth = brushSize;
             dctx.lineCap = 'round';
             dctx.lineJoin = 'round';
             
-            // Neon Effect
-            dctx.shadowBlur = size / 2;
+            dctx.shadowBlur = brushSize * 1.5;
             dctx.shadowColor = currentColor;
             
             dctx.stroke();
+            dctx.shadowBlur = 0; // Reset for performance
         }
 
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
-
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.8,
-            minTrackingConfidence: 0.8
-        });
-
+        const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
         hands.onResults(onResults);
 
-        const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await hands.send({image: videoElement});
-            },
-            width: 1280,
-            height: 720
+        const camera = new Camera(video, {
+            onFrame: async () => { await hands.send({image: video}); },
+            width: 1280, height: 720
         });
-
         camera.start();
     </script>
 </body>
