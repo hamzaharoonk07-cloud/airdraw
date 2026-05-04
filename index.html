@@ -3,40 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Air Draw - Pro</title>
+    <title>Neon Air Draw - Pro Edition</title>
+    <!-- MediaPipe Dependencies -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <style>
-        body { margin: 0; background: #000; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
-        #ui-layer { position: absolute; top: 10px; left: 10px; z-index: 100; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 15px; border: 1px solid #444; backdrop-filter: blur(10px); }
-        .palette { display: flex; gap: 8px; margin-bottom: 10px; }
-        .swatch { width: 30px; height: 30px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: 0.2s; }
-        .swatch:hover { transform: scale(1.2); }
-        .swatch.active { border-color: white; }
+        :root { --neon-blue: #00f2ff; }
+        body { margin: 0; background: #050505; color: white; font-family: 'Inter', sans-serif; overflow: hidden; }
+        
+        /* Side UI Panel */
+        #side-panel {
+            position: absolute; top: 20px; left: 20px; z-index: 100;
+            background: rgba(15, 15, 15, 0.85); padding: 20px; border-radius: 20px;
+            border: 1px solid #333; backdrop-filter: blur(12px);
+            display: flex; flex-direction: column; gap: 20px; width: 60px; align-items: center;
+        }
+
+        .palette { display: flex; flex-direction: column; gap: 12px; }
+        .swatch {
+            width: 35px; height: 35px; border-radius: 50%; cursor: pointer;
+            border: 3px solid transparent; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+        .swatch:hover { transform: scale(1.15); }
+        .swatch.active { border-color: white; transform: scale(1.1); box-shadow: 0 0 15px currentColor; }
+
+        #size-container { writing-mode: bt-lr; height: 150px; display: flex; align-items: center; }
+        input[type="range"] { height: 150px; -webkit-appearance: slider-vertical; cursor: pointer; }
+
         canvas, video { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; transform: scaleX(-1); }
         #drawCanvas { z-index: 2; }
-        #skeletonCanvas { z-index: 3; pointer-events: none; } /* Hand skeleton layer */
-        video { z-index: 1; opacity: 0.2; }
-        .info { position: absolute; bottom: 20px; width: 100%; text-align: center; z-index: 100; font-weight: bold; text-shadow: 0 0 10px #000; }
-        input[type="range"] { width: 100%; margin-top: 10px; }
+        #skeletonCanvas { z-index: 3; pointer-events: none; opacity: 0.8; }
+        video { z-index: 1; opacity: 0.25; filter: grayscale(100%); }
+
+        .status-bar {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            z-index: 100; padding: 10px 30px; border-radius: 50px;
+            background: rgba(0,0,0,0.6); font-weight: 800; text-transform: uppercase;
+            letter-spacing: 2px; border: 1px solid #444; font-size: 0.9rem;
+        }
+
+        .clear-btn {
+            background: #ff3333; color: white; border: none; padding: 10px;
+            border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 0.7rem;
+        }
     </style>
 </head>
 <body>
 
-    <div id="ui-layer">
-        <div class="palette" id="palette">
-            <div class="swatch active" style="background: #00f2ff;" data-color="#00f2ff"></div>
-            <div class="swatch" style="background: #ff007b;" data-color="#ff007b"></div>
-            <div class="swatch" style="background: #00ff40;" data-color="#00ff40"></div>
-            <div class="swatch" style="background: #ffff00;" data-color="#ffff00"></div>
-            <div class="swatch" style="background: #ffffff;" data-color="#ffffff"></div>
+    <div id="side-panel">
+        <div class="palette" id="colorPalette">
+            <div class="swatch active" style="background: #00f2ff; color: #00f2ff;" data-color="#00f2ff"></div>
+            <div class="swatch" style="background: #ff007b; color: #ff007b;" data-color="#ff007b"></div>
+            <div class="swatch" style="background: #00ff40; color: #00ff40;" data-color="#00ff40"></div>
+            <div class="swatch" style="background: #ffff00; color: #ffff00;" data-color="#ffff00"></div>
+            <div class="swatch" style="background: #9d00ff; color: #9d00ff;" data-color="#9d00ff"></div>
+            <div class="swatch" style="background: #ffffff; color: #ffffff;" data-color="#ffffff"></div>
         </div>
-        <input type="range" id="sizeSlider" min="2" max="25" value="6">
-        <button onclick="clearCanvas()" style="width:100%; margin-top:10px; background:#444; color:white; border:none; padding:5px; border-radius:5px; cursor:pointer;">CLEAR ALL</button>
+        <div id="size-container">
+            <input type="range" id="sizeSlider" min="2" max="30" value="8" step="1">
+        </div>
+        <button class="clear-btn" onclick="clearCanvas()">CLEAR</button>
     </div>
 
-    <div class="info" id="status">WAITING FOR CAMERA...</div>
+    <div class="status-bar" id="statusLabel">Initializing AI...</div>
 
     <video id="inputVideo" playsinline></video>
     <canvas id="drawCanvas"></canvas>
@@ -48,25 +79,29 @@
         const skelCanvas = document.getElementById('skeletonCanvas');
         const dctx = drawCanvas.getContext('2d');
         const sctx = skelCanvas.getContext('2d');
-        const status = document.getElementById('status');
-        
-        let currentColor = "#00f2ff";
-        let lastX = 0, lastY = 0, isDrawing = false;
+        const statusLabel = document.getElementById('statusLabel');
+        const sizeSlider = document.getElementById('sizeSlider');
 
-        // Swatch Logic
-        document.querySelectorAll('.swatch').forEach(s => {
-            s.onclick = (e) => {
-                document.querySelectorAll('.swatch').forEach(sw => sw.classList.remove('active'));
-                s.classList.add('active');
-                currentColor = s.dataset.color;
-            };
+        let activeColor = "#00f2ff";
+        let lastPos = { x: 0, y: 0 };
+        let isDrawing = false;
+
+        // Color Selection Logic
+        document.querySelectorAll('.swatch').forEach(swatch => {
+            swatch.addEventListener('click', () => {
+                document.querySelector('.swatch.active').classList.remove('active');
+                swatch.classList.add('active');
+                activeColor = swatch.dataset.color;
+                statusLabel.style.borderColor = activeColor;
+            });
         });
 
         function resize() {
             drawCanvas.width = skelCanvas.width = window.innerWidth;
             drawCanvas.height = skelCanvas.height = window.innerHeight;
         }
-        window.onresize = resize; resize();
+        window.addEventListener('resize', resize);
+        resize();
 
         function clearCanvas() { dctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height); }
 
@@ -74,51 +109,65 @@
             sctx.clearRect(0, 0, skelCanvas.width, skelCanvas.height);
 
             if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-                status.innerText = "NO HAND DETECTED";
+                statusLabel.innerText = "Hand not visible";
                 isDrawing = false;
                 return;
             }
 
             for (const landmarks of results.multiHandLandmarks) {
-                // Draw the skeleton as requested
-                drawConnectors(sctx, landmarks, HAND_CONNECTIONS, {color: '#ffffff', lineWidth: 2});
-                drawLandmarks(sctx, landmarks, {color: currentColor, lineWidth: 1, radius: 3});
+                // Render the Skeleton
+                drawConnectors(sctx, landmarks, HAND_CONNECTIONS, {color: '#ffffff55', lineWidth: 3});
+                drawLandmarks(sctx, landmarks, {color: activeColor, lineWidth: 1, radius: 4});
 
-                const indexTip = landmarks[8];
+                const indexTip = landmarks[8]; // Index Finger Tip
                 const x = indexTip.x * drawCanvas.width;
                 const y = indexTip.y * drawCanvas.height;
 
-                // Gesture detection logic from 99349.jpg
-                const isIndexUp = landmarks[8].y < landmarks[6].y;
-                const isPalm = landmarks[12].y < landmarks[9].y && landmarks[20].y < landmarks[17].y;
-                const isFist = landmarks[8].y > landmarks[5].y && landmarks[12].y > landmarks[9].y;
+                // Gesture Definitions
+                const isIndexExtended = landmarks[8].y < landmarks[6].y;
+                const isMiddleExtended = landmarks[12].y < landmarks[10].y;
+                const isPinkyExtended = landmarks[20].y < landmarks[18].y;
 
-                if (isFist) {
-                    status.innerText = "PAUSED (FIST)";
-                    isDrawing = false;
-                } else if (isPalm) {
-                    status.innerText = "ERASING (PALM)";
+                // 1. ERASE: Open Palm (Index, Middle, and Pinky are up)
+                if (isIndexExtended && isMiddleExtended && isPinkyExtended) {
+                    statusLabel.innerText = "Mode: Eraser";
                     dctx.globalCompositeOperation = 'destination-out';
-                    draw(x, y, 40);
-                } else if (isIndexUp) {
-                    status.innerText = "DRAWING (INDEX)";
-                    dctx.globalCompositeOperation = 'source-over';
-                    draw(x, y, document.getElementById('sizeSlider').value);
+                    draw(x, y, 50); 
+                } 
+                // 2. PAUSE: Closed Fist (Index is down)
+                else if (!isIndexExtended) {
+                    statusLabel.innerText = "Mode: Paused (Fist)";
+                    isDrawing = false;
                 }
-                lastX = x; lastY = y;
+                // 3. DRAW: Index Up Only
+                else {
+                    statusLabel.innerText = "Mode: Drawing";
+                    dctx.globalCompositeOperation = 'source-over';
+                    draw(x, y, sizeSlider.value);
+                }
+
+                lastPos = { x, y };
             }
         }
 
-        function draw(x, y, size) {
-            if (!isDrawing) { isDrawing = true; lastX = x; lastY = y; return; }
+        function draw(x, y, brushSize) {
+            if (!isDrawing) {
+                isDrawing = true;
+                lastPos = { x, y };
+                return;
+            }
             dctx.beginPath();
-            dctx.moveTo(lastX, lastY);
+            dctx.moveTo(lastPos.x, lastPos.y);
             dctx.lineTo(x, y);
-            dctx.strokeStyle = currentColor;
-            dctx.lineWidth = size;
+            dctx.strokeStyle = activeColor;
+            dctx.lineWidth = brushSize;
             dctx.lineCap = 'round';
-            dctx.shadowBlur = 10;
-            dctx.shadowColor = currentColor;
+            dctx.lineJoin = 'round';
+            
+            // Neon Glow
+            dctx.shadowBlur = 15;
+            dctx.shadowColor = activeColor;
+            
             dctx.stroke();
         }
 
@@ -129,8 +178,8 @@
         hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.7
+            minDetectionConfidence: 0.75,
+            minTrackingConfidence: 0.75
         });
 
         hands.onResults(onResults);
