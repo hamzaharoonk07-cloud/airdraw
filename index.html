@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AirDraw Ultra - Universal</title>
+    <!-- Core MediaPipe Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <style>
+        :root { --neon: #00f2ff; --bg: #0a0a0a; }
+        body {
+            margin: 0; background: var(--bg); color: white;
+            font-family: -apple-system, system-ui, sans-serif;
+            overflow: hidden; position: fixed; width: 100%; height: 100%;
+        }
+        #ui-bar {
+            position: absolute; top: 0; left: 0; width: 100%; z-index: 100;
+            padding: env(safe-area-inset-top) 15px 15px; box-sizing: border-box;
+            display: flex; justify-content: space-between; align-items: center;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+        }
+        #start-screen {
+            position: fixed; inset: 0; background: var(--bg);
+            z-index: 1000; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; text-align: center;
+        }
+        button {
+            padding: 14px 28px; border-radius: 50px; border: none;
+            background: var(--neon); color: #000; font-weight: 900;
+            cursor: pointer; box-shadow: 0 0 20px var(--neon);
+        }
+        canvas, video {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            object-fit: cover; transform: scaleX(-1);
+        }
+        #status-pill {
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.1); padding: 8px 20px;
+            border-radius: 20px; font-size: 14px; font-weight: bold;
+            backdrop-filter: blur(10px); z-index: 99; border: 1px solid rgba(255,255,255,0.2);
+        }
+        input[type="range"] { accent-color: var(--neon); }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen">
+        <h1 style="letter-spacing: 4px;">AIR DRAW AI</h1>
+        <p style="opacity: 0.7; margin-bottom: 25px;">Works on PC, iPhone, and Android</p>
+        <button id="launchBtn">START CAMERA</button>
+    </div>
+
+    <div id="ui-bar" class="hidden">
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <input type="color" id="colorPicker" value="#00f2ff" style="width:40px; height:40px; border:none; background:none;">
+            <input type="range" id="sizeSlider" min="2" max="60" value="12">
+        </div>
+        <button id="clearBtn" style="background: #ff3b30; color: white; box-shadow: none; padding: 10px 20px;">CLEAR</button>
+    </div>
+
+    <div id="status-pill">INITIALIZING...</div>
+
+    <video id="inputVideo" playsinline muted></video>
+    <canvas id="drawingCanvas"></canvas>
+
+    <script>
+        const video = document.getElementById('inputVideo');
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        const status = document.getElementById('status-pill');
+        const launchBtn = document.getElementById('launchBtn');
+        
+        let lastX = 0, lastY = 0, drawingActive = false;
+
+        function syncCanvas() {
+            canvas.width = window.innerWidth * window.devicePixelRatio;
+            canvas.height = window.innerHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        window.addEventListener('resize', syncCanvas);
+        syncCanvas();
+
+        document.getElementById('clearBtn').onclick = () => ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        function processFrame(results) {
+            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+                status.innerText = "✋ SHOW HAND";
+                drawingActive = false;
+                return;
+            }
+
+            const hand = results.multiHandLandmarks[0];
+            const indexTip = hand[8];
+            const middleTip = hand[12];
+            const pinkyTip = hand[20];
+
+            const x = indexTip.x * window.innerWidth;
+            const y = indexTip.y * window.innerHeight;
+
+            // Gesture Logic
+            const isFist = indexTip.y > hand[6].y && middleTip.y > hand[10].y;
+            const isPalm = indexTip.y < hand[6].y && middleTip.y < hand[10].y && pinkyTip.y < hand[18].y;
+
+            if (isFist) {
+                status.innerText = "⏸ PAUSED";
+                drawingActive = false;
+            } else if (isPalm) {
+                status.innerText = "🧹 ERASER";
+                ctx.globalCompositeOperation = 'destination-out';
+                renderLine(x, y, true);
+            } else {
+                status.innerText = "✏️ DRAWING";
+                ctx.globalCompositeOperation = 'source-over';
+                renderLine(x, y, false);
+            }
+
+            lastX = x; lastY = y;
+        }
+
+        function renderLine(x, y, isEraser) {
+            if (!drawingActive) {
+                drawingActive = true;
+                lastX = x; lastY = y;
+                return;
+            }
+
+            const size = document.getElementById('sizeSlider').value;
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            ctx.lineWidth = isEraser ? size * 4 : size;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = document.getElementById('colorPicker').value;
+            
+            if (!isEraser) {
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = ctx.strokeStyle;
+            }
+            ctx.stroke();
+        }
+
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        // Mobile-first optimization
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 0, 
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(processFrame);
+
+        launchBtn.onclick = async () => {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('ui-bar').classList.remove('hidden');
+            
+            try {
+                const cam = new Camera(video, {
+                    onFrame: async () => { await hands.send({image: video}); },
+                    width: window.innerWidth > 800 ? 1280 : 640,
+                    height: window.innerHeight > 800 ? 720 : 480
+                });
+                await cam.start();
+            } catch (err) {
+                console.error("Camera failed, using 99349.jpg as placeholder reference.");
+                status.innerText = "CAMERA ERROR - Check Permissions";
+                // Fallback context: referencing 99349.jpg if needed for background
+            }
+        };
+    </script>
+</body>
+</html>
